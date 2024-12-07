@@ -1,3 +1,4 @@
+from copy import deepcopy
 import enum
 from pathlib import Path
 import sys
@@ -15,6 +16,49 @@ EXAMPLE_INPUT = """
 ......#...
 """
 
+TEST_INPUT_1 = """
+....#.......
+...........#
+....^.......
+...#........
+............
+..........#.
+"""
+
+TEST_INPUT_2 = """
+....#.......
+...........#
+....^.......
+............
+..........#.
+"""
+
+TEST_INPUT_3 = """
+########
+#......#
+...^...#
+########
+"""
+
+TEST_INPUT_4 = """
+....
+#..#
+.^#.
+"""
+
+TEST_INPUT_5 = """
+###
+..#
+^##
+"""
+
+TEST_INPUT_6 = """
+##..
+...#
+....
+^.#.
+"""
+
 # True means obstructed, False means open
 type Map = list[list[bool]]
 # Order is line, column
@@ -26,6 +70,9 @@ class Direction(enum.Enum):
     RIGHT = (0, 1)
     DOWN = (1, 0)
     LEFT = (0, -1)
+
+
+type Step = tuple[Coordinates, Direction]
 
 
 def turn_right(direction: Direction) -> Direction:
@@ -52,92 +99,83 @@ def parse_input(input: str) -> tuple[Map, Coordinates, Direction]:
     return (map, guard_location, Direction.UP)
 
 
-def project_ray(map: Map, pos: Coordinates, direction: Direction) -> set[Coordinates]:
-    ray: set[Coordinates] = {pos}
-    while True:
-        pos = move(pos, direction)
+def compute_path(
+    map: Map,
+    guard_pos: Coordinates,
+    guard_dir: Direction,
+    already_visited: set[Step] | None = None,
+) -> list[Step] | None:
+    # Guard's starting postion is always visited
+    visited: set[Step] = (
+        {(guard_pos, guard_dir)} if already_visited is None else already_visited.copy()
+    )
+    path: list[Step] = [(guard_pos, guard_dir)]
+    guard_has_left = False
+    while not guard_has_left:
+        new_pos = move(guard_pos, guard_dir)
+        # Is the new position out of bounds ?
+        if ((new_pos, guard_dir)) in visited:
+            # The guard has entered a loop, stop here
+            return None
         if (
-            pos[0] < 0
-            or pos[0] >= len(map)
-            or pos[1] < 0
-            or pos[1] >= len(map[0])
-            or map[pos[0]][pos[1]]
+            new_pos[0] < 0
+            or new_pos[0] >= len(map)
+            or new_pos[1] < 0
+            or new_pos[1] >= len(map[0])
         ):
-            return ray
-        ray.add(pos)
+            # The guard has left the map
+            guard_has_left = True
+            break
+        elif not map[new_pos[0]][new_pos[1]]:
+            # The cell is free, the guard moves there
+            visited.add((new_pos, guard_dir))
+            path.append((new_pos, guard_dir))
+            guard_pos = new_pos
+        else:
+            # The cell is obstructed, the guard turns right
+            guard_dir = turn_right(guard_dir)
+            visited.add((guard_pos, guard_dir))
+            # path.append((new_pos, guard_dir))
+    return path
 
 
 def part1(input: str) -> int:
     map, guard_pos, guard_dir = parse_input(input)
     # Guard's starting postion is always visited
-    visited: set[Coordinates] = {guard_pos}
-    guard_has_left = False
-    while not guard_has_left:
-        new_pos = move(guard_pos, guard_dir)
-        # Is the new position out of bounds ?
-        if (
-            new_pos[0] < 0
-            or new_pos[0] >= len(map)
-            or new_pos[1] < 0
-            or new_pos[1] >= len(map[0])
-        ):
-            # The guard has left the map
-            guard_has_left = True
-        elif not map[new_pos[0]][new_pos[1]]:
-            # The cell is free, the guard moves there
-            visited.add(new_pos)
-            guard_pos = new_pos
-        else:
-            # The cell is obstructed, the guard turns right
-            guard_dir = turn_right(guard_dir)
-    return len(visited)
+    path = compute_path(map, guard_pos, guard_dir)
+    assert isinstance(path, list)
+    return len(set([step[0] for step in path]))
 
 
-def part2(input: str) -> int:
+def part2_fixed(input: str) -> int:
     map, guard_pos, guard_dir = parse_input(input)
-    # Cells visited by direction
-    visited: dict[Direction, set[Coordinates]] = {
-        Direction.UP: {guard_pos},
-        Direction.DOWN: set(),
-        Direction.LEFT: set(),
-        Direction.RIGHT: set(),
-    }
-    # Cast a ray towards the back of the guard's starting position
-    virtually_visited = project_ray(map, guard_pos, turn_back(guard_dir))
-    visited[guard_dir] |= virtually_visited
+    # Compute the path (pos+dir) once
+    clear_path = compute_path(map, guard_pos, guard_dir)
+    # Assert to make type checker happy
+    assert isinstance(clear_path, list)
 
     obstacles: set[Coordinates] = set()
-    guard_has_left = False
-    count = 0
-    while not guard_has_left:
-        new_pos = move(guard_pos, guard_dir)
-        # Obstacle case #1: Have we already visited this cell while going in the
-        # next direction before?
-        if guard_pos in visited[turn_right(guard_dir)]:
-            obstacles.add(new_pos)
-            count += 1
-        # Is the new position out of bounds ?
-        if (
-            new_pos[0] < 0
-            or new_pos[0] >= len(map)
-            or new_pos[1] < 0
-            or new_pos[1] >= len(map[0])
-        ):
-            # The guard has left the map
-            guard_has_left = True
-        elif not map[new_pos[0]][new_pos[1]]:
-            # The cell is free, the guard moves there
-            visited[guard_dir].add(new_pos)
-            guard_pos = new_pos
-        else:
-            # The cell is obstructed, the guard turns right
-            guard_dir = turn_right(guard_dir)
-            visited[guard_dir].add(guard_pos)
-            # Cast a ray behind the guard, flag all the cells as "visited"
-            # This will be used by the obstacle case #1
-            virtually_visited = project_ray(map, guard_pos, turn_back(guard_dir))
-            visited[guard_dir] |= virtually_visited
-    return count
+    # For each step of the path:
+    for i, step in enumerate(clear_path[:-1]):
+        # Place an obstacle on the next step
+        obstacle_coords = clear_path[i + 1]
+        if obstacle_coords[0] == guard_pos:
+            # We cannot place an obstacle on the guard's initial spot
+            continue
+        if obstacle_coords[0] in [step[0] for step in clear_path[:i]]:
+            # We cannot place an obstacle on a cell already traversed by the guard
+            continue
+        # FIXME: optimize this by not copying the map by applying a mask on it
+        map_with_obstacles = deepcopy(map)
+        map_with_obstacles[obstacle_coords[0][0]][obstacle_coords[0][1]] = True
+        # Try to solve the rest of the path, using the path so far
+        path_or_fail = compute_path(
+            map_with_obstacles, step[0], step[1], set(clear_path[:i])
+        )
+        # If the solve fails, we entered a loop, so the obstacle is useful
+        if path_or_fail is None:
+            obstacles.add(obstacle_coords[0])
+    return len(obstacles)
 
 
 """
@@ -161,18 +199,12 @@ if __name__ == "__main__":
     result1 = part1(INPUT_TEXT)
     print(result1)
 
-    result = part2(
-        """
-....#.......
-...........#
-....^.......
-...#........
-............
-..........#.
-    """
-    )
-    print(result)
-
-    assert part2(EXAMPLE_INPUT) == 6
-    result2 = part2(INPUT_TEXT)
+    assert part2_fixed(EXAMPLE_INPUT) == 6
+    assert part2_fixed(TEST_INPUT_1) == 2
+    assert part2_fixed(TEST_INPUT_2) == 1
+    assert part2_fixed(TEST_INPUT_3) == 6
+    assert part2_fixed(TEST_INPUT_4) == 1
+    assert part2_fixed(TEST_INPUT_5) == 0
+    assert part2_fixed(TEST_INPUT_6) == 0
+    result2 = part2_fixed(INPUT_TEXT)
     print(result2)
