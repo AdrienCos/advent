@@ -1,5 +1,5 @@
 from pathlib import Path
-
+import sys
 
 
 EXAMPLE_INPUT = """
@@ -11,8 +11,6 @@ EXAMPLE_INPUT = """
 1 3 6 7 9
 """
 
-INPUT_PATH = Path(__file__).parent.parent / "inputs" / "day02.txt"
-
 
 def parse_input(input: str) -> list[list[int]]:
     lines = input.strip().split("\n")
@@ -22,9 +20,10 @@ def parse_input(input: str) -> list[list[int]]:
         reports.append(report)
     return reports
 
+
 def is_safe(report: list[int]) -> bool:
     # Check if report is monotonic
-    if (sorted(report) != report and sorted(report, reverse=True) != report):
+    if sorted(report) != report and sorted(report, reverse=True) != report:
         return False
     # Check if rate of change is between 1 and 3
     diffs = [abs(report[i] - report[i - 1]) for i in range(1, len(report))]
@@ -32,18 +31,23 @@ def is_safe(report: list[int]) -> bool:
         return True
     return False
 
+
 def part1(input: str) -> int:
     reports = parse_input(input)
     safe_count = [is_safe(report) for report in reports].count(True)
     return safe_count
 
+
 def part2(input: str) -> int:
     reports = parse_input(input)
     safe_count = 0
     for report in reports:
-        sub_reports = [report[0:i] + report[i+1:] for i in range(len(report))] + [report]
+        sub_reports = [report[0:i] + report[i + 1 :] for i in range(len(report))] + [
+            report
+        ]
         safe_count += any([is_safe(sub_report) for sub_report in sub_reports])
     return safe_count
+
 
 """
 Benchmark 1 (132 runs): python day02.py
@@ -57,10 +61,12 @@ Benchmark 1 (132 runs): python day02.py
     branch_misses       709K  ±  106K      184K  …  810K           6 ( 5%
 """
 if __name__ == "__main__":
+    INPUT_TEXT = Path(sys.argv[1]).read_text()
+
     assert part1(EXAMPLE_INPUT) == 2
-    result1 = part1(INPUT_PATH.read_text())
+    result1 = part1(INPUT_TEXT)
     print(result1)
 
     assert part2(EXAMPLE_INPUT) == 4
-    result2 = part2(INPUT_PATH.read_text())
+    result2 = part2(INPUT_TEXT)
     print(result2)

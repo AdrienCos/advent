@@ -1,19 +1,22 @@
 import enum
 from pathlib import Path
 import re
+import sys
 
-EXAMPLE_INPUT = """xmul(2,4)&mul[3,7]!^don't()_mul(5,5)+mul(32,64](mul(11,8)undo()?mul(8,5))"""
-
-INPUT_PATH = Path(__file__).parent.parent / "inputs" / "day03.txt"
+EXAMPLE_INPUT = (
+    """xmul(2,4)&mul[3,7]!^don't()_mul(5,5)+mul(32,64](mul(11,8)undo()?mul(8,5))"""
+)
 
 
 def parse_input(input: str) -> str:
     return input.strip()
 
+
 class OP(enum.Enum):
     MUL = 0
     DO = 1
     DONT = 2
+
 
 def part1(input: str) -> int:
     ops = re.finditer(r"mul\((\d{1,3}),(\d{1,3})\)", input)
@@ -22,11 +25,15 @@ def part1(input: str) -> int:
         sum += int(op.group(1)) * int(op.group(2))
     return sum
 
+
 def part2(input: str) -> int:
-    mul_ops = [(e.start(),OP.MUL,  e) for e in  re.finditer(r"mul\((\d{1,3}),(\d{1,3})\)", input)]
-    do_ops= [(e.start(),OP.DO,  e) for e in re.finditer(r"do\(\)", input)]
-    dont_ops = [(e.start(),OP.DONT,  e) for e in re.finditer(r"don't\(\)", input)]
-    ops = sorted((mul_ops + do_ops + dont_ops), key= lambda x: x[0])
+    mul_ops = [
+        (e.start(), OP.MUL, e)
+        for e in re.finditer(r"mul\((\d{1,3}),(\d{1,3})\)", input)
+    ]
+    do_ops = [(e.start(), OP.DO, e) for e in re.finditer(r"do\(\)", input)]
+    dont_ops = [(e.start(), OP.DONT, e) for e in re.finditer(r"don't\(\)", input)]
+    ops = sorted((mul_ops + do_ops + dont_ops), key=lambda x: x[0])
     filtered_ops: list[re.Match[str]] = []
     enabled = True
     for op in ops:
@@ -43,6 +50,7 @@ def part2(input: str) -> int:
         sum += int(op.group(1)) * int(op.group(2))
     return sum
 
+
 """
 Benchmark 1 (210 runs): python src/day03.py
     measurement          mean ± σ            min … max           outliers
@@ -55,10 +63,12 @@ Benchmark 1 (210 runs): python src/day03.py
     branch_misses       663K  ±  104K        0   …  726K          26 (12%)
 """
 if __name__ == "__main__":
+    INPUT_TEXT = Path(sys.argv[1]).read_text()
+
     assert part1(EXAMPLE_INPUT) == 161
-    result1 = part1(INPUT_PATH.read_text())
+    result1 = part1(INPUT_TEXT)
     print(result1)
 
     assert part2(EXAMPLE_INPUT) == 48
-    result2 = part2(INPUT_PATH.read_text())
+    result2 = part2(INPUT_TEXT)
     print(result2)

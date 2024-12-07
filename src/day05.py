@@ -1,4 +1,5 @@
 from pathlib import Path
+import sys
 
 EXAMPLE_INPUT = """
 47|53
@@ -31,16 +32,15 @@ EXAMPLE_INPUT = """
 97,13,75,29,47
 """
 
-INPUT_PATH = Path(__file__).parent.parent / "inputs" / "day05.txt"
-
 type Rule = tuple[int, int]
 type Update = list[int]
+
 
 def parse_input(input: str) -> tuple[list[Rule], list[Update]]:
     raw_rules, raw_updates = input.strip().split("\n\n")
     rules: list[Rule] = []
     for line in raw_rules.split("\n"):
-        split_rules = (line.split("|"))
+        split_rules = line.split("|")
         before_rule = int(split_rules[0])
         after_rule = int(split_rules[1])
         rule = (before_rule, after_rule)
@@ -48,7 +48,8 @@ def parse_input(input: str) -> tuple[list[Rule], list[Update]]:
     updates: list[Update] = []
     for line in raw_updates.split("\n"):
         updates.append(list(map(int, line.split(","))))
-    return (rules,updates)
+    return (rules, updates)
+
 
 def recursive_build(values: set[int], rules: list[Rule]) -> tuple[list[int], set[int]]:
     if len(values) == 0:
@@ -82,6 +83,7 @@ def build_ruleset(rules: list[Rule]) -> list[int]:
     ruleset, _ = recursive_build(values, rules)
     return ruleset
 
+
 def build_filtered_ruleset(rules: list[Rule], update: Update) -> list[int]:
     # For Part 2 only, this will build a ruleset using only the rules where both
     # values are present in the given update.
@@ -91,7 +93,10 @@ def build_filtered_ruleset(rules: list[Rule], update: Update) -> list[int]:
             filtered_rules.append(rule)
     return build_ruleset(filtered_rules)
 
-def get_correct_and_incorrect_updates(ruleset: list[int], updates: list[Update]) -> tuple[list[Update], list[Update]]:
+
+def get_correct_and_incorrect_updates(
+    ruleset: list[int], updates: list[Update]
+) -> tuple[list[Update], list[Update]]:
     correct_updates: list[Update] = []
     incorrect_updates: list[Update] = []
     for update in updates:
@@ -111,7 +116,7 @@ def part1(input: str) -> int:
     count = 0
     correct_updates, _ = get_correct_and_incorrect_updates(ruleset, updates)
     for update in correct_updates:
-        count += update[int(len(update)/2)]
+        count += update[int(len(update) / 2)]
     return count
 
 
@@ -123,7 +128,7 @@ def part2(input: str) -> int:
     for update in incorrect_updates:
         filtered_ruleset = build_filtered_ruleset(rules, update)
         corrected_update = [value for value in filtered_ruleset if value in update]
-        count += corrected_update[int(len(corrected_update)/2)]
+        count += corrected_update[int(len(corrected_update) / 2)]
     return count
 
 
@@ -139,10 +144,12 @@ Benchmark 1 (79 runs): python src/day05.py
     branch_misses       901K  ± 80.0K      491K  …  960K           9 (11%)
 """
 if __name__ == "__main__":
+    INPUT_TEXT = Path(sys.argv[1]).read_text()
+
     assert part1(EXAMPLE_INPUT) == 143
-    result1 = part1(INPUT_PATH.read_text())
+    result1 = part1(INPUT_TEXT)
     print(result1)
 
     assert part2(EXAMPLE_INPUT) == 123
-    result2 = part2(INPUT_PATH.read_text())
+    result2 = part2(INPUT_TEXT)
     print(result2)

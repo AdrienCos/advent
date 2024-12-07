@@ -1,4 +1,5 @@
 from pathlib import Path
+import sys
 
 
 EXAMPLE_INPUT = """
@@ -9,8 +10,6 @@ EXAMPLE_INPUT = """
 3   9
 3   3
 """
-
-INPUT_PATH = Path(__file__).parent.parent / "inputs" / "day01.txt"
 
 
 def parse_input(input: str) -> tuple[list[int], list[int]]:
@@ -52,10 +51,12 @@ Benchmark 1 (153 runs): python src/day01.py
     branch_misses       836K  ± 6.22K      824K  …  861K           6 ( 4%)
 """
 if __name__ == "__main__":
+    INPUT_TEXT = Path(sys.argv[1]).read_text()
+
     assert part1(EXAMPLE_INPUT) == 11
-    result1 = part1(INPUT_PATH.read_text())
+    result1 = part1(INPUT_TEXT)
     print(result1)
 
     assert part2(EXAMPLE_INPUT) == 31
-    result2 = part2(INPUT_PATH.read_text())
+    result2 = part2(INPUT_TEXT)
     print(result2)

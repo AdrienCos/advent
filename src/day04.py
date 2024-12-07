@@ -1,4 +1,5 @@
 from pathlib import Path
+import sys
 import numpy as np
 
 EXAMPLE_INPUT = """
@@ -13,8 +14,6 @@ SAXAMASAAA
 MAMMMXMMMM
 MXMXAXMASX
 """
-
-INPUT_PATH = Path(__file__).parent.parent / "inputs" / "day04.txt"
 
 
 def parse_input(input: str):
@@ -101,10 +100,12 @@ Benchmark 1 (100 runs): ./venv/bin/python src/day04.py
     branch_misses      2.86M  ± 41.2K     2.78M  … 3.03M           5 ( 5%)
 """
 if __name__ == "__main__":
+    INPUT_TEXT = Path(sys.argv[1]).read_text()
+
     assert part1(EXAMPLE_INPUT) == 18
-    result1 = part1(INPUT_PATH.read_text())
+    result1 = part1(INPUT_TEXT)
     print(result1)
 
     assert part2(EXAMPLE_INPUT) == 9
-    result2 = part2(INPUT_PATH.read_text())
+    result2 = part2(INPUT_TEXT)
     print(result2)
