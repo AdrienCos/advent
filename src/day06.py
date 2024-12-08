@@ -1,3 +1,4 @@
+import cProfile
 from pathlib import Path
 import sys
 
@@ -73,8 +74,11 @@ class Map:
 
     def patch(self, coords: Coordinates) -> None:
         self._patch = coords
+        self._obstacles.add(coords)
 
     def unpatch(self) -> None:
+        if self._patch is not None:
+            self._obstacles.remove(self._patch)
         self._patch = None
 
     def __init__(self, map: list[list[bool]]) -> None:
@@ -82,6 +86,12 @@ class Map:
         self._patch = None
         self.lines = len(map)
         self.columns = len(map[0])
+        self._obstacles: set[Coordinates] = set()
+        for i, line in enumerate(map):
+            for j, cell in enumerate(line):
+                if cell:
+                    self._obstacles.add((i, j))
+        return
 
     def __call__(self, coords: Coordinates) -> bool | None:
         if coords == self._patch:
@@ -95,33 +105,80 @@ class Map:
             return None
         return self._map[coords[0]][coords[1]]
 
-    def walk(
+    def _obstacles_ahead(
+        self, position: Coordinates, direction: Direction
+    ) -> Coordinates | None:
+        if direction == (1, 0):
+            # Moving down
+            obstacle_ahead = [
+                obstacle
+                for obstacle in self._obstacles
+                if obstacle[1] == position[1] and obstacle[0] > position[0]
+            ]
+            obstacle_ahead.sort(key=lambda pos: pos[0])
+        elif direction == (-1, 0):
+            # Moving up
+            obstacle_ahead = [
+                obstacle
+                for obstacle in self._obstacles
+                if obstacle[1] == position[1] and obstacle[0] < position[0]
+            ]
+            obstacle_ahead.sort(key=lambda pos: -pos[0])
+        elif direction == (0, 1):
+            # Moving right
+            obstacle_ahead = [
+                obstacle
+                for obstacle in self._obstacles
+                if obstacle[0] == position[0] and obstacle[1] > position[1]
+            ]
+            obstacle_ahead.sort(key=lambda pos: pos[1])
+        else:
+            # Moving left
+            obstacle_ahead = [
+                obstacle
+                for obstacle in self._obstacles
+                if obstacle[0] == position[0] and obstacle[1] < position[1]
+            ]
+            obstacle_ahead.sort(key=lambda pos: -pos[1])
+
+        if len(obstacle_ahead) == 0:
+            return None
+        return obstacle_ahead[0]
+
+    def teleport(
         self, start: Coordinates, direction: Direction
     ) -> tuple[bool, Coordinates, list[Step]]:
-        # Return True if we left the map
-        pos = start
-        walk_steps: list[Step] = []
-        while True:
-            new_pos = move(pos, direction)
-            new_cell = self(new_pos)
-            if new_cell is None:
-                # Out of the map
-                return (True, pos, walk_steps)
-            elif new_cell:
-                # We are against an obstacle, stop there
-                return (False, pos, walk_steps)
+        will_exit = False
+        obstacle_ahead = self._obstacles_ahead(start, direction)
+        if obstacle_ahead is None:
+            # We will exit
+            will_exit = True
+            if direction == (1, 0):
+                last_pos = (self.lines - 1, start[1])
+            elif direction == (-1, 0):
+                last_pos = (0, start[1])
+            elif direction == (0, 1):
+                last_pos = (start[0], self.columns - 1)
             else:
-                # We take another step
-                pos = new_pos
-                walk_steps.append((pos, direction))
+                last_pos = (start[0], 0)
+        else:
+            last_pos = (
+                obstacle_ahead[0] - direction[0],
+                obstacle_ahead[1] - direction[1],
+            )
+        steps_nb = max(abs(last_pos[0] - start[0]), abs(last_pos[1] - start[1]))
+        walk_steps = [
+            (move(start, direction, i), direction) for i in range(1, steps_nb + 1)
+        ]
+        return (will_exit, last_pos, walk_steps)
 
 
 def turn_right(direction: Direction) -> Direction:
     return (direction[1], -direction[0])
 
 
-def move(pos: Coordinates, direction: Direction) -> Coordinates:
-    return (pos[0] + direction[0], pos[1] + direction[1])
+def move(pos: Coordinates, direction: Direction, stride: int = 1) -> Coordinates:
+    return (pos[0] + stride * direction[0], pos[1] + stride * direction[1])
 
 
 def parse_input(input: str) -> tuple[Map, Coordinates, Direction]:
@@ -149,7 +206,7 @@ def compute_path(
     path: list[Step] = [(guard_pos, guard_dir)]
     guard_has_left = False
     while not guard_has_left:
-        has_left, final_pos, walk_steps = map.walk(guard_pos, guard_dir)
+        has_left, final_pos, walk_steps = map.teleport(guard_pos, guard_dir)
         if set(walk_steps).intersection(visited):
             # The guard has entered a loop, stop here
             return None
@@ -238,5 +295,8 @@ if __name__ == "__main__":
     assert part2_fixed(TEST_INPUT_4) == 1
     assert part2_fixed(TEST_INPUT_5) == 0
     assert part2_fixed(TEST_INPUT_6) == 0
-    result2 = part2_fixed(INPUT_TEXT)
-    print(result2)
+    with cProfile.Profile() as pr:
+        pr.disable()
+        result2 = part2_fixed(INPUT_TEXT)
+    pr.print_stats("cumtime")
+    # print(result2)
