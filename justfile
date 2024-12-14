@@ -13,3 +13,8 @@ show-input day:
 install:
     virtualenv -p python3 venv
     ./venv/bin/pip install -r requirements.txt
+
+init-day day:
+    cp src/dayXX.py src/day{{ day }}.py
+    sops edit inputs/day{{ day }}.txt.enc
+    sops decrypt --output inputs/day{{ day }}.txt inputs/day{{ day }}.txt.enc
