@@ -20,6 +20,12 @@ Register C: 0
 
 Program: 0,3,5,4,3,0
 """
+# Decompiled:
+# ADV 3
+# OUT A
+# JNZ 0
+# While A != 0, divide A by eight, and print Amod8
+# It prints A in base 8 in reverse, skipping the 8**0 place
 
 
 class ReservedError(Exception):
@@ -79,7 +85,7 @@ class CPU:
     def cycle(self) -> None:
         instr, operand = self.fetch()
         opcode = self.decode_opcode(instr)
-        operand_value = self.decode_operand(opcode, operand)
+        operand_value, _ = self.decode_operand(opcode, operand)
         self.execute(opcode, operand_value)
 
     def fetch(self) -> tuple[int, int]:
@@ -91,18 +97,18 @@ class CPU:
     def decode_opcode(instr: int) -> OpCode:
         return OPCODES[instr]
 
-    def decode_operand(self, opcode: OpCode, operand: int) -> int:
+    def decode_operand(self, opcode: OpCode, operand: int) -> tuple[int, str]:
         if opcode not in [OpCode.ADV, OpCode.BST, OpCode.OUT, OpCode.CDV, OpCode.BDV]:
-            return operand
+            return operand, str(operand)
 
         if operand <= 3:
-            return operand
+            return operand, str(operand)
         elif operand == 4:
-            return self.a
+            return self.a, "A"
         elif operand == 5:
-            return self.b
+            return self.b, "B"
         elif operand == 6:
-            return self.c
+            return self.c, "C"
         else:
             raise ReservedError("Combo operand 7 is reserved")
 
@@ -143,6 +149,21 @@ class CPU:
         else:
             raise InvalidOpCode(f"Invalid opcode {opcode}")
 
+    def decompile(self) -> str:
+        decompiled_instr: list[str] = [
+            "Raw instructions: " + ",".join(str(e) for e in self.instr)
+        ]
+        for i in range(0, self.instr_size, 2):
+            instr, operand = self.instr[i : i + 2]
+            opcode = self.decode_opcode(instr)
+            if opcode == OpCode.BXC:
+                operand_name = ""
+            else:
+                _, operand_name = self.decode_operand(opcode, operand)
+            decomp = f"{opcode.name} {operand_name}"
+            decompiled_instr.append(decomp)
+        return "\n".join(decompiled_instr)
+
 
 def parse_input(input: str) -> CPU:
     lines = input.strip().split("\n")
@@ -160,10 +181,12 @@ def part1(input: str) -> str:
     return ",".join([str(e) for e in result])
 
 
-def part2(input: str) -> int:
+def part2(input: str, a_override: int | None = None) -> list[int]:
     cpu = parse_input(input)
-    count = 0
-    return count
+    if a_override is not None:
+        cpu.a = a_override
+    result = cpu.run()
+    return result
 
 
 """
@@ -179,6 +202,15 @@ if __name__ == "__main__":
     result1 = part1(input_text)
     print(result1)
 
-    assert part2(EXAMPLE_INPUT) == -1
-    result2 = part2(input_text)
-    print(result2)
+    to_reverse = parse_input(input_text)
+    instr = to_reverse.instr
+    print(to_reverse.decompile())
+    for target_size in range(2, len(instr) + 1, 2):
+        target = instr[-target_size:]
+        print(f"Target: {target}")
+        for i in range(2**32):
+            result2 = part2(input_text, i)
+            if result2 == target:
+                print(i, result2)
+            if len(result2) > len(target):
+                break
