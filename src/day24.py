@@ -179,7 +179,9 @@ def register_bit_number(register: Register) -> int | None:
 
 # Returns a copy of the gate array with the provided output registers swapped
 def swap_gates_outputs(
-    output_1: Register, output_2: Register, gates: GateArray
+    output_1: Register,
+    output_2: Register,
+    gates: GateArray,
 ) -> GateArray:
     new_gates = gates.copy()
 
@@ -190,7 +192,10 @@ def swap_gates_outputs(
 
 
 def find_gate_output(
-    gates: GateArray, a: Register, b: Register, op: Gate
+    gates: GateArray,
+    a: Register,
+    b: Register,
+    op: Gate,
 ) -> Register | None:
     for output, gate in gates.items():
         if gate[0] != op:
@@ -200,7 +205,10 @@ def find_gate_output(
 
 
 def find_gate_second_input(
-    gates: GateArray, input: Register, output: Register, op: Gate
+    gates: GateArray,
+    input: Register,
+    output: Register,
+    op: Gate,
 ) -> Register | None:
     for out, gate in gates.items():
         if gate[0] != op:
@@ -213,10 +221,28 @@ def find_gate_second_input(
             return gate[1]
 
 
+def find_potential_gates(
+    gates: GateArray,
+    input: Register,
+    op: Gate,
+) -> list[Register]:
+    partial_matches: list[Register] = []
+
+    for out, gate in gates.items():
+        if gate[0] != op:
+            continue
+        if input not in gate[1:]:
+            continue
+        partial_matches.append(out)
+
+    return partial_matches
+
+
 # Returns a list of suggested swaps that could improve the array, and a set of
 # registers not linked to any valid-ish gate during the analysis
 def analyze(
-    registers: RegisterBank, gates: GateArray
+    registers: RegisterBank,
+    gates: GateArray,
 ) -> tuple[list[tuple[Register, Register]], set[Register]]:
     nb_bits = len([e for e in registers if e.startswith("x")])
     # List of register pairs that should be swapped. If a single invalid register
@@ -253,6 +279,15 @@ def analyze(
         seen_registers.add(x_and_y)
         if x_and_y is not None and is_output_register(x_and_y):
             potential_swaps.append((x_and_y, ""))
+
+        # Check if the Xi^Yi and Xi.Yi have been swapped
+        # One way to check if is Xi^Yi is used in an OR operation
+        if (
+            x_xor_y is not None
+            and x_and_y is not None
+            and len(find_potential_gates(gates, x_xor_y, OR)) != 0
+        ):
+            potential_swaps.append((x_xor_y, x_and_y))
 
         # Try to reverse-engineer the Cin register from Zi and Xi^Yi
         if input_carry_register is None and x_xor_y is not None:
@@ -316,7 +351,7 @@ def part1(input: str) -> int:
 
 def part2(input: str) -> str:
     registers, gates = parse_input(input)
-    invalid_regs, unseen_regs = analyze(registers, gates)
+    invalid_regs, _ = analyze(registers, gates)
 
     swaps_done: set[tuple[Register, Register]] = set()
     swaps = [e for e in invalid_regs if e[0] != "" and e[1] != ""]
@@ -328,19 +363,9 @@ def part2(input: str) -> str:
             continue
         swaps_done.add(pair)
         gates = swap_gates_outputs(pair[0], pair[1], gates)
-        new_invalid_regs, unseen_regs = analyze(registers, gates)
+        new_invalid_regs, _ = analyze(registers, gates)
         new_swaps = [e for e in new_invalid_regs if e[0] != "" and e[1] != ""]
         swaps += new_swaps
-
-    # Hopefully there are zero or exactly two registers still unseen
-    if len(unseen_regs) == 2:
-        swap = (unseen_regs.pop(), unseen_regs.pop())
-        # HACK: just swapping these last two registers does not work, we need
-        # some deeper analysis to actually find that a register we identified
-        # as correct if actually swapped
-        # This value is the result of a manual search for the last pair :(
-        swap = ("jgt", "mht")
-        swaps_done.add(swap)
 
     swapped_regs_list = [e for tup in swaps_done for e in tup]
     output = ",".join(sorted(swapped_regs_list))
