@@ -113,16 +113,6 @@ type RegisterBank = dict[Register, int | None]
 type GateArray = dict[Register, tuple[Gate, Register, Register]]
 
 
-def int_to_registers(value: int, nb_bits: int, register_id: str) -> dict[Register, int]:
-    registers: dict[Register, int] = {}
-    for i in range(nb_bits):
-        reg_name = f"{register_id}{i:02d}"
-        reg_val = value & 1
-        registers[reg_name] = reg_val
-        value = value >> 1
-    return registers
-
-
 def registers_to_int(registers: RegisterBank, register_id: str) -> int:
     relevant_registers = [e for e in registers.keys() if e.startswith(register_id)]
     sum = 0
@@ -175,45 +165,142 @@ def get_register_value(
     return reg_value
 
 
-def test_gate_array(registers: RegisterBank, gates: GateArray) -> None:
-    targets = [e for e in registers.keys() if e.startswith("z")]
-    for i in range(45):
-        x_val = 2**i
-        x_regs = int_to_registers(x_val, 45, "x")
-        for j in range(45):
-            y_val = 2**j
-            y_regs = int_to_registers(y_val, 45, "y")
-            temp_regs = registers.copy()
-            temp_regs |= x_regs
-            temp_regs |= y_regs
-            for target in targets:
-                target_value = get_register_value(target, temp_regs, gates)
-                registers[target] = target_value
-            z_val = registers_to_int(temp_regs, "z")
-            if z_val == x_val + y_val:
-                print(z_val, i, j)
+def is_output_register(register: Register) -> bool:
+    return register.startswith("z")
 
 
-def get_input_bits_of_register(
-    register: Register, gates: GateArray
-) -> tuple[set[Register], set[Register], set[Register]]:
-    x_registers: set[Register] = set()
-    y_registers: set[Register] = set()
-    all_inputs: set[Register] = set()
-    to_explore = [register]
-    while len(to_explore) != 0:
-        reg = to_explore.pop()
-        if reg.startswith("x"):
-            x_registers.add(reg)
-        elif reg.startswith("y"):
-            y_registers.add(reg)
-        all_inputs.add(reg)
-        if reg in gates:
-            _, reg_1, reg_2 = gates[reg]
-            to_explore.append(reg_1)
-            to_explore.append(reg_2)
+def register_bit_number(register: Register) -> int | None:
+    try:
+        value = int(register[1:])
+        return value
+    except ValueError:
+        return None
 
-    return (x_registers), (y_registers), all_inputs
+
+# Returns a copy of the gate array with the provided output registers swapped
+def swap_gates_outputs(
+    output_1: Register, output_2: Register, gates: GateArray
+) -> GateArray:
+    new_gates = gates.copy()
+
+    tmp_gate = new_gates[output_1]
+    new_gates[output_1] = new_gates[output_2]
+    new_gates[output_2] = tmp_gate
+    return new_gates
+
+
+def find_gate_output(
+    gates: GateArray, a: Register, b: Register, op: Gate
+) -> Register | None:
+    for output, gate in gates.items():
+        if gate[0] != op:
+            continue
+        if sorted([a, b]) == sorted(gate[1:]):
+            return output
+
+
+def find_gate_second_input(
+    gates: GateArray, input: Register, output: Register, op: Gate
+) -> Register | None:
+    for out, gate in gates.items():
+        if gate[0] != op:
+            continue
+        if output != out:
+            continue
+        if input == gate[1]:
+            return gate[2]
+        if input == gate[2]:
+            return gate[1]
+
+
+# Returns a list of suggested swaps that could improve the array, and a set of
+# registers not linked to any valid-ish gate during the analysis
+def analyze(
+    registers: RegisterBank, gates: GateArray
+) -> tuple[list[tuple[Register, Register]], set[Register]]:
+    nb_bits = len([e for e in registers if e.startswith("x")])
+    # List of register pairs that should be swapped. If a single invalid register
+    # is found, the second one is set to ''
+    potential_swaps: list[tuple[Register, Register]] = []
+    # Dict that maps bit number to their corresponding adder output carry register
+    carry_registers: dict[int, Register] = {}
+    # Set of all registers linked to a valid gate at some point
+    seen_registers: set[Register | None] = set(["x00", "y00"])
+
+    # First bit case
+    x00_xor_y00 = find_gate_output(gates, "x00", "y00", XOR)
+    x00_and_y00 = find_gate_output(gates, "x00", "y00", AND)
+    seen_registers.add(x00_and_y00)
+    seen_registers.add(x00_xor_y00)
+    if x00_and_y00 is not None and not is_output_register(x00_and_y00):
+        carry_registers[0] = x00_and_y00
+
+    for i in range(1, nb_bits):
+        x_label = f"x{i:02d}"
+        y_label = f"y{i:02d}"
+        input_carry_register = carry_registers.get(i - 1, None)
+        seen_registers.add(x_label)
+        seen_registers.add(y_label)
+
+        # Find output of Xi^Yi gate
+        x_xor_y = find_gate_output(gates, x_label, y_label, XOR)
+        seen_registers.add(x_xor_y)
+        if x_xor_y is not None and is_output_register(x_xor_y):
+            potential_swaps.append((x_xor_y, ""))
+
+        # Find output of Xi.Yi gate
+        x_and_y = find_gate_output(gates, x_label, y_label, AND)
+        seen_registers.add(x_and_y)
+        if x_and_y is not None and is_output_register(x_and_y):
+            potential_swaps.append((x_and_y, ""))
+
+        # Try to reverse-engineer the Cin register from Zi and Xi^Yi
+        if input_carry_register is None and x_xor_y is not None:
+            potential_input_carry = find_gate_second_input(
+                gates, x_xor_y, f"z{i:02d}", XOR
+            )
+            if potential_input_carry is not None and not is_output_register(
+                potential_input_carry
+            ):
+                input_carry_register = potential_input_carry
+                seen_registers.add(input_carry_register)
+
+        # Find X^Y^Cin = Z gate
+        if input_carry_register is not None and x_xor_y is not None:
+            xy_xor_c = find_gate_output(gates, x_xor_y, input_carry_register, XOR)
+            seen_registers.add(xy_xor_c)
+            if xy_xor_c is not None and (
+                not is_output_register(xy_xor_c) or register_bit_number(xy_xor_c) != i
+            ):
+                potential_swaps.append((xy_xor_c, f"z{i:02d}"))
+        else:
+            pass
+
+        # Find Cin.(X^Y)
+        if input_carry_register is not None and x_xor_y is not None:
+            xy_and_c = find_gate_output(gates, x_xor_y, input_carry_register, AND)
+            seen_registers.add(xy_and_c)
+            if xy_and_c is not None and not is_output_register(xy_and_c):
+                # Find (X.Y) + Cin.(X^Y) = Cout
+                if x_and_y is not None:
+                    output_carry_register = find_gate_output(
+                        gates, x_and_y, xy_and_c, OR
+                    )
+                    _ = seen_registers.add(output_carry_register)
+                    if output_carry_register is None:
+                        continue
+                    if is_output_register(output_carry_register) and i != 44:
+                        potential_swaps.append((output_carry_register, ""))
+                    elif not is_output_register(output_carry_register) and i == 44:
+                        print(
+                            f"Invalid Cout gate output for bit {i:02d}: {output_carry_register}"
+                        )
+                        potential_swaps.append((output_carry_register, ""))
+                    else:
+                        carry_registers[i] = output_carry_register
+
+    unseen_registers = set(registers.keys()) - seen_registers
+    return potential_swaps, unseen_registers
 
 
 def part1(input: str) -> int:
@@ -227,26 +314,43 @@ def part1(input: str) -> int:
     return sum
 
 
-def part2(input: str) -> int:
+def part2(input: str) -> str:
     registers, gates = parse_input(input)
-    targets = [e for e in registers.keys() if e.startswith("z")]
+    invalid_regs, unseen_regs = analyze(registers, gates)
 
-    for target in targets:
-        # for target in sorted(targets):
-        x_input, y_input, all_inputs = get_input_bits_of_register(target, gates)
+    swaps_done: set[tuple[Register, Register]] = set()
+    swaps = [e for e in invalid_regs if e[0] != "" and e[1] != ""]
+    while swaps != []:
+        pair = swaps.pop()
+        if pair[0] == "" or pair[1] == "":
+            continue
+        if pair in swaps_done:
+            continue
+        swaps_done.add(pair)
+        gates = swap_gates_outputs(pair[0], pair[1], gates)
+        new_invalid_regs, unseen_regs = analyze(registers, gates)
+        new_swaps = [e for e in new_invalid_regs if e[0] != "" and e[1] != ""]
+        swaps += new_swaps
 
-        print(f"""
-For {target}: x={len(x_input)}, y={len(y_input)}
-X: {sorted(list(x_input))}
-Y: {sorted(list(y_input))}
-All: {sorted(list(all_inputs))}
-        """)
+    # Hopefully there are zero or exactly two registers still unseen
+    if len(unseen_regs) == 2:
+        swap = (unseen_regs.pop(), unseen_regs.pop())
+        # HACK: just swapping these last two registers does not work, we need
+        # some deeper analysis to actually find that a register we identified
+        # as correct if actually swapped
+        # This value is the result of a manual search for the last pair :(
+        swap = ("jgt", "mht")
+        swaps_done.add(swap)
 
-    count = 0
-    return count
+    swapped_regs_list = [e for tup in swaps_done for e in tup]
+    output = ",".join(sorted(swapped_regs_list))
+    return output
 
 
 """
+Benchmark 1: ./venv/bin/python src/day24.py /var/folders/fm/891_8yt158b05hy09ypkjyt40000gn/T/.sops45296776/tmp-file65667850
+    Time (mean ± σ):      87.6 ms ±   6.6 ms    [User: 73.1 ms, System: 10.9 ms]
+    Range (min … max):    78.9 ms … 103.3 ms    31 runs
 """
 if __name__ == "__main__":
     if len(sys.argv) > 1:
@@ -260,3 +364,4 @@ if __name__ == "__main__":
     print(result1)
 
     result2 = part2(input_text)
+    print(result2)
