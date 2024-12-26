@@ -144,12 +144,17 @@ Benchmark 1 (79 runs): python src/day05.py
     branch_misses       901K  ± 80.0K      491K  …  960K           9 (11%)
 """
 if __name__ == "__main__":
-    INPUT_TEXT = Path(sys.argv[1]).read_text()
+    if len(sys.argv) > 1:
+        input_text = Path(sys.argv[1]).read_text()
+    else:
+        input_text = (
+            Path(__file__).parent.parent / "inputs" / "2024" / "day05.txt"
+        ).read_text()
 
     assert part1(EXAMPLE_INPUT) == 143
-    result1 = part1(INPUT_TEXT)
+    result1 = part1(input_text)
     print(result1)
 
     assert part2(EXAMPLE_INPUT) == 123
-    result2 = part2(INPUT_TEXT)
+    result2 = part2(input_text)
     print(result2)

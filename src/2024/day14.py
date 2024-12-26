@@ -119,7 +119,9 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         input_text = Path(sys.argv[1]).read_text()
     else:
-        input_text = (Path(__file__).parent.parent / "inputs" / "day14.txt").read_text()
+        input_text = (
+            Path(__file__).parent.parent / "inputs" / "2024" / "day14.txt"
+        ).read_text()
 
     assert part1(EXAMPLE_INPUT, 11, 7) == 12
     result1 = part1(input_text, 101, 103)

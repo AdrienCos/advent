@@ -1,20 +1,20 @@
-run day:
-    sops exec-file inputs/day{{ day }}.txt.enc "./venv/bin/python src/day{{ day }}.py {}"
+set positional-arguments := true
+default_year := '2024'
 
-time day:
-    sops exec-file --no-fifo inputs/day{{ day }}.txt.enc "hyperfine \"./venv/bin/python src/day{{ day }}.py {}\""
+run day year=default_year:
+    sops exec-file inputs/{{ year }}/day{{ day }}.txt.enc "./venv/bin/python src/{{ year }}/day{{ day }}.py {}"
 
-benchmark day:
-    sops exec-file --no-fifo inputs/day{{ day }}.txt.enc "poop \"./venv/bin/python src/day{{ day }}.py {}\""
+time day year=default_year:
+    sops exec-file --no-fifo inputs/{{ year }}/day{{ day }}.txt.enc "hyperfine \"./venv/bin/python src/{{ year }}/day{{ day }}.py {}\""
 
-show-input day:
-    sops decrypt inputs/day{{ day }}.txt.enc
+show-input day year=default_year:
+    sops decrypt inputs/{{ year }}/day{{ day }}.txt.enc
 
 install:
     virtualenv -p python3 venv
     ./venv/bin/pip install -r requirements.txt
 
-init-day day:
-    cp src/dayXX.py src/day{{ day }}.py
-    sops edit inputs/day{{ day }}.txt.enc
-    sops decrypt --output inputs/day{{ day }}.txt inputs/day{{ day }}.txt.enc
+init-day day year=default_year:
+    cp src/dayXX.py src/{{ year }}/day{{ day }}.py
+    sops edit inputs/{{ year }}/day{{ day }}.txt.enc
+    sops decrypt --output inputs/{{ year }}/day{{ day }}.txt inputs/{{ year }}/day{{ day }}.txt.enc

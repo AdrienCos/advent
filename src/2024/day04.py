@@ -100,12 +100,17 @@ Benchmark 1 (100 runs): ./venv/bin/python src/day04.py
     branch_misses      2.86M  ± 41.2K     2.78M  … 3.03M           5 ( 5%)
 """
 if __name__ == "__main__":
-    INPUT_TEXT = Path(sys.argv[1]).read_text()
+    if len(sys.argv) > 1:
+        input_text = Path(sys.argv[1]).read_text()
+    else:
+        input_text = (
+            Path(__file__).parent.parent / "inputs" / "2024" / "day04.txt"
+        ).read_text()
 
     assert part1(EXAMPLE_INPUT) == 18
-    result1 = part1(INPUT_TEXT)
+    result1 = part1(input_text)
     print(result1)
 
     assert part2(EXAMPLE_INPUT) == 9
-    result2 = part2(INPUT_TEXT)
+    result2 = part2(input_text)
     print(result2)
